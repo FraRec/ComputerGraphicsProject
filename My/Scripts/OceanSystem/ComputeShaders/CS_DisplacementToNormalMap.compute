@@ -1,0 +1,92 @@
+#pragma kernel Calculate_NormalMap
+
+sampler2D displacementMap;
+//texture2D displacementMap;
+RWTexture2D<float4> normalMap;
+
+float N;
+
+[numthreads(8,8,1)]
+void Calculate_NormalMap (uint3 id : SV_DispatchThreadID) {
+	/*
+	float strength = 0.5f;
+	int X = id.x;
+	int Z = id.y;
+
+	int X_plus_one = (X + 1) % N;
+	int Z_plus_one = (Z + 1) % N;
+
+	int X_minus_one = X - 1;
+	int Z_minus_one = Z - 1;
+	if(X == 0) X_minus_one = 255;
+	if(Z == 0) Z_minus_one = 255;
+
+	// surrounding pixels
+	int2 topLeft	 = int2(X_minus_one, Z_minus_one	);
+	int2 left		 = int2(X_minus_one, Z				);
+	int2 bottomLeft	 = int2(X_minus_one, Z_plus_one		);
+	int2 top		 = int2(X,			 Z_minus_one	);
+	int2 bottom		 = int2(X,			 Z_plus_one		);
+	int2 topRight	 = int2(X_plus_one,	 Z_minus_one	);
+	int2 right		 = int2(X_plus_one,	 Z				);
+	int2 bottomRight = int2(X_plus_one,	 Z_plus_one		);
+
+	float tl = displacementMap[topLeft	  ].y;		
+	float  l = displacementMap[left		  ].y;			
+	float bl = displacementMap[bottomLeft ].y;	
+	float  t = displacementMap[top		  ].y;			
+	float  b = displacementMap[bottom	  ].y;		
+	float tr = displacementMap[topRight	  ].y;		
+	float  r = displacementMap[right	  ].y;		
+	float br = displacementMap[bottomRight].y;	
+
+	// sobel filter
+	float dX = (tr + 2.0f * r + br) - (tl + 2.0f * l + bl);
+	float dY = (bl + 2.0f * b + br) - (tl + 2.0f * t + tr);
+	float dZ = 1.0f / strength;
+
+	float3 n = normalize(float3(dX, dY, dZ));
+	normalMap[id.xy] = float4(n, 1);
+	*/
+
+	float h = 1.0f / float(N);
+	float4 uv = float4(id.xy, 0, 0) / float(N);
+
+	// Y
+	float yRight  = tex2Dlod(displacementMap, uv + float4(h, 0, 0, 0)).y;
+	float yLeft   = tex2Dlod(displacementMap, uv - float4(h, 0, 0, 0)).y;
+	float yTop	  = tex2Dlod(displacementMap, uv + float4(0, h, 0, 0)).y;
+	float yBottom = tex2Dlod(displacementMap, uv - float4(0, h, 0, 0)).y;
+
+	float3 dy_horizontalDiff = float3(2, (yRight - yLeft), 0);
+	float3 dy_verticalDiff	 = float3(0, (yTop - yBottom), 2);
+	float3 dy = normalize(cross(dy_verticalDiff, dy_horizontalDiff));
+
+	/*
+	// X
+	float xRight  = tex2Dlod(displacementMap, uv + float4(h, 0, 0, 0)).x;
+	float xLeft   = tex2Dlod(displacementMap, uv - float4(h, 0, 0, 0)).x;
+	float xTop	  = tex2Dlod(displacementMap, uv + float4(0, h, 0, 0)).x;
+	float xBottom = tex2Dlod(displacementMap, uv - float4(0, h, 0, 0)).x;
+
+	float dx_horizontal = (xRight - xLeft) / (2.0f * h);
+	float dx_vertical   = (xTop - xBottom) / (2.0f * h);
+	float dx = dx_horizontal + dx_vertical / 2.0f;
+
+	// Z
+	float zRight  = tex2Dlod(displacementMap, uv + float4(h, 0, 0, 0)).z;
+	float zLeft   = tex2Dlod(displacementMap, uv - float4(h, 0, 0, 0)).z;
+	float zTop    = tex2Dlod(displacementMap, uv + float4(0, h, 0, 0)).z;
+	float zBottom = tex2Dlod(displacementMap, uv - float4(0, h, 0, 0)).z;
+	
+	float dz_horizontal = (zRight - zLeft) / (2.0f * h);
+	float dz_vertical   = (zTop - zBottom) / (2.0f * h);
+	float dz = dz_horizontal + dz_vertical / 2.0f;
+	*/
+
+	// Output
+	normalMap[id.xy] = float4(dy.xzy, 1);
+}
+
+
+

@@ -1,0 +1,105 @@
+#pragma kernel HorizontalButterflies
+#pragma kernel VerticalButterflies
+
+#define M_PI 3.1415926535897932384626433832795
+
+Texture2D<float4> butterfly;
+RWTexture2D<float4> pingpong0;
+RWTexture2D<float4> pingpong1;
+RWTexture2D<float4> Output;
+
+int stage;
+int pingpong;
+int direction;
+
+struct complex {
+	float real;
+	float im;
+};
+
+complex ComplexContructor(float real, float im) {
+	complex c;
+	c.real = real;
+	c.im = im;
+	return c;
+}
+
+complex mul(complex c0, complex c1) {
+	complex c;
+	c.real = c0.real * c1.real - c0.im * c1.im;
+	c.im = c0.real * c1.im + c0.im * c1.real;
+	return c;
+}
+
+complex add(complex c0, complex c1) {
+	complex c;
+	c.real = c0.real + c1.real;
+	c.im = c0.im + c1.im;
+	return c;
+}
+
+[numthreads(8, 8, 1)]
+void HorizontalButterflies(uint3 id : SV_DispatchThreadID) {
+	complex H;
+	float2 x = float2(id.xy);
+
+	if (pingpong == 0) {
+		float4 data = butterfly[int2(stage, x.x)].xyzw;
+		float2 p_ = pingpong0[int2(data.z, x.y)].xy;
+		float2 q_ = pingpong0[int2(data.w, x.y)].xy;
+		float2 w_ = float2(data.x, data.y);
+
+		complex p = ComplexContructor(p_.x, p_.y);
+		complex q = ComplexContructor(q_.x, q_.y);
+		complex w = ComplexContructor(w_.x, w_.y);
+
+		H = add(p, mul(w, q));
+		pingpong1[x] = float4(H.real, H.im, 0, 1);
+	}
+	else if (pingpong == 1) {
+		float4 data = butterfly[int2(stage, x.x)].xyzw;
+		float2 p_ = pingpong1[int2(data.z, x.y)].xy;
+		float2 q_ = pingpong1[int2(data.w, x.y)].xy;
+		float2 w_ = float2(data.x, data.y);
+
+		complex p = ComplexContructor(p_.x, p_.y);
+		complex q = ComplexContructor(q_.x, q_.y);
+		complex w = ComplexContructor(w_.x, w_.y);
+
+		H = add(p, mul(w, q));
+		pingpong0[x] = float4(H.real, H.im, 0, 1);
+	}
+}
+
+[numthreads(8, 8, 1)]
+void VerticalButterflies(uint3 id : SV_DispatchThreadID) {
+	complex H;
+	float2 x = float2(id.xy);
+
+	if (pingpong == 0) {
+		float4 data = butterfly[int2(stage, x.y)].xyzw;
+		float2 p_ = pingpong0[int2(x.x, data.z)].xy;
+		float2 q_ = pingpong0[int2(x.x, data.w)].xy;
+		float2 w_ = float2(data.x, data.y);
+
+		complex p = ComplexContructor(p_.x, p_.y);
+		complex q = ComplexContructor(q_.x, q_.y);
+		complex w = ComplexContructor(w_.x, w_.y);
+
+		H = add(p, mul(w, q));
+		pingpong1[x] = float4(H.real, H.im, 0, 1);
+	}
+	else if (pingpong == 1) {
+		float4 data = butterfly[int2(stage, x.y)].xyzw;
+		float2 p_ = pingpong1[int2(x.x, data.z)].xy;
+		float2 q_ = pingpong1[int2(x.x, data.w)].xy;
+		float2 w_ = float2(data.x, data.y);
+
+		complex p = ComplexContructor(p_.x, p_.y);
+		complex q = ComplexContructor(q_.x, q_.y);
+		complex w = ComplexContructor(w_.x, w_.y);
+
+		H = add(p, mul(w, q));
+		pingpong0[x] = float4(H.real, H.im, 0, 1);
+	}
+}

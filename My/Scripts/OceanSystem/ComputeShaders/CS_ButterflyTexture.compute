@@ -1,0 +1,53 @@
+#pragma kernel Calculate_ButterflyTexture
+#define M_PI 3.1415926535897932384626433832795
+
+int N;
+
+RWBuffer<int> bit_reversed;
+RWTexture2D<float4> butterfly;
+
+struct complex {
+	float real;
+	float im;
+};
+
+complex ComplexConstructor(float real, float im) {
+	complex c;
+	c.real = real;
+	c.im = im;
+	return c;
+}
+
+float mod(float x, float y) {
+	return x - y * floor(x / y);
+}
+
+[numthreads(4,256,1)]
+void Calculate_ButterflyTexture (uint3 id : SV_DispatchThreadID) {
+	float2 x = id.xy;
+	float k = mod(x.y * (float(N) / pow(2, x.x + 1)), N);
+	
+	complex twiddle = ComplexConstructor(cos(2.0f * M_PI * k / float(N)), sin(2.0f * M_PI * k / float(N)));
+	int butterflyspan = int(pow(2, x.x));
+	
+	int butterflywing;
+	if(mod(x.y, pow(2, x.x + 1)) < pow(2, x.x))
+		butterflywing = 1;
+	else 
+		butterflywing = 0;
+
+	// first stage, bit reversed indices
+	if(x.x == 0) {
+		if (butterflywing == 1)	// top butterflywing
+			butterfly[x] = float4(twiddle.real, twiddle.im, bit_reversed[int(x.y)], bit_reversed[int(x.y + 1)]);
+		else					// bottom butterflywing
+			butterfly[x] = float4(twiddle.real, twiddle.im, bit_reversed[int(x.y - 1)], bit_reversed[int(x.y)]);
+	}
+	// second to log2 (N) stage
+	else {
+		if(butterflywing == 1)	// top butterflywing
+			butterfly[x] = float4(twiddle.real, twiddle.im, x.y, x.y + butterflyspan);
+		else					// bottom butterflywing
+			butterfly[x] = float4(twiddle.real, twiddle.im, x.y - butterflyspan, x.y);
+	}
+}

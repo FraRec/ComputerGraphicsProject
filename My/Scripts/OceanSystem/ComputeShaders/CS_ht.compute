@@ -1,0 +1,84 @@
+#pragma kernel Calculate_ht
+#define M_PI 3.1415926535897932384626433832795
+
+Texture2D<float4> h0;
+
+int N;
+int L;
+float t;
+
+RWTexture2D<float4> hkt_dy;
+RWTexture2D<float4> hkt_dx;
+RWTexture2D<float4> hkt_dz;
+
+struct complex {
+	float real;
+	float im;
+};
+
+complex ComplexConstructor(float real, float im) {
+	complex c;
+	c.real = real;
+	c.im   = im;
+	return c;
+}
+
+complex mul(complex c0, complex c1) {
+	complex c;
+	c.real = c0.real * c1.real - c0.im * c1.im;
+	c.im = c0.real * c1.im + c0.im * c1.real;
+	return c;
+}
+
+complex add(complex c0, complex c1) {
+	complex c;
+	c.real = c0.real + c1.real;
+	c.im = c0.im + c1.im;
+	return c;
+}
+
+complex conj(complex c) {
+	complex c_conj = ComplexConstructor(c.real, -c.im);
+	return c_conj;
+}
+
+[numthreads(8,8,1)]
+void Calculate_ht(uint3 id : SV_DispatchThreadID) {
+	float2 x = float2(id.xy) - float(N) / 2.0f;
+	float2 k = float2(2.0f * M_PI * x.x / float(L), 2.0f * M_PI * x.y / float(L));
+	
+	float magnitude = length(k);
+	if(magnitude < 0.00001f) magnitude = 0.00001f;
+	float w = sqrt(9.81f * magnitude);
+	
+	float2 h0k_values	   = h0[id.xy].xy;
+	float2 h0minusk_values = h0[id.xy].zw;
+
+	complex fourier_cmp		 = ComplexConstructor(h0k_values.x, h0k_values.y);
+	complex fourier_cmp_conj = conj(ComplexConstructor(h0minusk_values.x, h0minusk_values.y));
+
+	float cos_w_t = cos(w * t);
+	float sin_w_t = sin(w * t);
+
+	// euler formula
+	complex exp_iwt		= ComplexConstructor(cos_w_t,  sin_w_t);
+	complex exp_iwt_inv = ComplexConstructor(cos_w_t, -sin_w_t);
+	
+	// dy
+	complex h_k_t_dy = add(
+		mul(fourier_cmp, exp_iwt),
+		mul(fourier_cmp_conj, exp_iwt_inv)
+	);
+	
+	// dx
+	complex dx = ComplexConstructor(0.0, -k.x / magnitude);
+	complex h_k_t_dx = mul(dx, h_k_t_dy);
+	
+	// dz
+	complex dy = ComplexConstructor(0.0, -k.y / magnitude);
+	complex h_k_t_dz = mul(dy, h_k_t_dy);
+	
+	hkt_dy[id.xy] = float4(h_k_t_dy.real, h_k_t_dy.im, 0, 1);
+	hkt_dx[id.xy] = float4(h_k_t_dx.real, h_k_t_dx.im, 0, 1);
+	hkt_dz[id.xy] = float4(h_k_t_dz.real, h_k_t_dz.im, 0, 1);
+}

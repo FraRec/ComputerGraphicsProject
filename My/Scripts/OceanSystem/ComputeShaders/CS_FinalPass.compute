@@ -1,0 +1,38 @@
+#pragma kernel Calculate_FinalPass
+#pragma kernel Merge_Displacements
+
+texture2D<float4> input;
+texture2D<float4> displacement_dy;
+texture2D<float4> displacement_dx;
+texture2D<float4> displacement_dz;
+
+RWTexture2D<float4> output;
+
+int N;
+int pingpong;
+
+float mod(float x, float y) {
+	return x - y * floor(x / y);
+}
+
+[numthreads(8,8,1)]
+void Calculate_FinalPass (uint3 id : SV_DispatchThreadID) {
+	float2 x = float2(id.xy);
+	float perms[] = { 1.0f , -1.0f };
+	int index = int(mod((int(x.x + x.y)), 2));
+
+	float perm = perms[index];
+
+	float h = input[x].x;
+	output[x] = float4(
+		perm * (h / float(N * N)),
+		perm * (h / float(N * N)),
+		perm * (h / float(N * N)),
+		1
+	);
+}
+
+[numthreads(8, 8, 1)]
+void Merge_Displacements(uint3 id : SV_DispatchThreadID) {
+	output[id.xy] = float4(displacement_dx[id.xy].x, displacement_dy[id.xy].y, displacement_dz[id.xy].z, 1);
+}

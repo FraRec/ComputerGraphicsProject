@@ -1,0 +1,77 @@
+﻿#pragma kernel Calculate_h0
+
+#define M_PI 3.1415926535897932384626433832795
+
+sampler2D noise_r0;
+sampler2D noise_i0;
+sampler2D noise_r1;
+sampler2D noise_i1;
+
+int N;
+int L;
+float A;
+float windSpeed;
+float2 windDirection;
+
+float g = 9.81f;
+
+RWTexture2D<float4> h0;
+
+// Box−Muller−Method
+float4 gaussRND(uint3 id) {
+    float2 texCoord = float2(id.xy) / float(N);
+    float noise00 = clamp(tex2Dlod(noise_r0, float4(texCoord, 0, 0)).r, 0.001f, 1.0f);
+    float noise01 = clamp(tex2Dlod(noise_i0, float4(texCoord, 0, 0)).r, 0.001f, 1.0f);
+    float noise02 = clamp(tex2Dlod(noise_r1, float4(texCoord, 0, 0)).r, 0.001f, 1.0f);
+    float noise03 = clamp(tex2Dlod(noise_i1, float4(texCoord, 0, 0)).r, 0.001f, 1.0f);
+    float u0 = 2.0f * M_PI * noise00;
+    float v0 = sqrt(-2.0f * log(noise01));
+    float u1 = 2.0f * M_PI * noise02;
+    float v1 = sqrt(-2.0f * log(noise03));
+    float4 rnd = float4(v0 * cos(u0), v0 * sin(u0), v1 * cos(u1), v1 * sin(u1));
+    return rnd;
+}
+
+[numthreads(8,8,1)]
+void Calculate_h0(uint3 id : SV_DispatchThreadID) {
+    float2 x = float2(id.xy) - float(N) / 2.0f;
+    float2 k = float2(2.0f * M_PI * x.x / float(L), 2.0f * M_PI * x.y / float(L));
+    float L_ = (windSpeed * windSpeed) / g;
+    
+    float mag = length(k);
+    if(mag < 0.00001f) mag = 0.00001f;
+    float magSq = mag * mag;
+    
+    float rangeFreq = 4000.0;
+
+    // sqrt(Ph(k)) / sqrt(2)
+    float h0k = clamp(
+        sqrt(
+            (A / (magSq * magSq))
+            * pow(dot(normalize(k), normalize(windDirection)), 6.0f)
+            * exp(-(1.0f / (magSq * L_ * L_)))
+            * exp(-magSq * pow(float(L) / 2000.0f, 2.0f))
+        ) / sqrt(2.0f),
+
+        -rangeFreq,
+        rangeFreq
+    );
+
+    // sqrt(Ph(−k)) / sqrt(2)
+    float h0minusk = clamp(
+        sqrt(
+            (A / (magSq * magSq))
+            * pow(dot(normalize(-k), normalize(windDirection)), 6.0f)
+            * exp(-(1.0f / (magSq * L_ * L_)))
+            * exp(-magSq * pow(float(L) / 2000.0f, 2.0f))
+        ) / sqrt(2.0f),
+
+        -rangeFreq,
+        rangeFreq
+    );
+
+    float4 gauss_random = gaussRND(id);
+
+    h0[id.xy] = float4(gauss_random.xy * h0k, gauss_random.zw * h0minusk);
+}
+
